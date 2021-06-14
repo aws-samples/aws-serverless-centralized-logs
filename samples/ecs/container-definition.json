@@ -1,0 +1,37 @@
+{
+  "family": "ecs-sample-log",
+  "executionRoleArn": "",
+  "taskRoleArn": "",
+  "networkMode": "awsvpc",
+  "cpu": "256",
+  "memory": "512",
+  "requiresCompatibilities": ["FARGATE"],
+  "containerDefinitions": [
+    {
+      "logConfiguration": {
+        "logDriver": "awsfirelens",
+        "options": {
+          "delivery_stream": "",
+          "region": "",
+          "Name": "firehose"
+        }
+      },
+      "portMappings": [
+        {
+          "hostPort": 80,
+          "protocol": "tcp",
+          "containerPort": 80
+        }
+      ],
+      "image": "",
+      "name": "demo_container"
+    },
+    {
+      "firelensConfiguration": {
+        "type": "fluentbit"
+      },
+      "image": "906394416424.dkr.ecr.us-east-1.amazonaws.com/aws-for-fluent-bit:latest",
+      "name": "log_router"
+    }
+  ]
+}

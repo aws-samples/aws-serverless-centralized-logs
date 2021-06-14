@@ -1,0 +1,209 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  LogsLifeCycle:
+    Type: Number
+    Description: Number in days to retain logs
+    Default: 30
+
+# change to [true, false] to disable the kinesis creation for the resource
+Conditions:
+  HasECS: !Equals [true, true]
+  HasLambda: !Equals [true, true]
+  HasApiGtw: !Equals [true, true]
+  HasEC2: !Equals [true, true]
+
+Resources:
+  LogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'logs-${AWS::AccountId}'
+      AccessControl: Private
+      LifecycleConfiguration:
+        Rules:
+          - Status: Enabled
+            ExpirationInDays: !Ref LogsLifeCycle
+
+  GlueRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'GlueCrawler-to-S3-${AWS::AccountId}'
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - glue.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: gluecrawler-s3-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !GetAtt LogBucket.Arn
+                  - !Sub '${LogBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - glue:*
+                  - logs:*
+                Resource:
+                  - "*"
+
+  KinesisRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'KinesisFirehose-to-S3-${AWS::AccountId}'
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - firehose.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: kinesisfirehose-s3-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:PutObject
+                Resource:
+                  - !GetAtt LogBucket.Arn
+                  - !Sub '${LogBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - kinesis:DescribeStream
+                  - kinesis:GetShardIterator
+                  - kinesis:GetRecords
+                  - kinesis:ListShards
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - logs:PutLogEvents
+                  - lambda:InvokeFunction
+                  - lambda:GetFunctionConfiguration
+                Resource:
+                  - "*"
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Sub 'logdb-${AWS::AccountId}'
+
+  GlueCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Sub 'crawler-${AWS::AccountId}'
+      Role: !GetAtt GlueRole.Arn
+      Schedule:
+        ScheduleExpression: cron(0 12 * * ? *)
+      DatabaseName: !Ref GlueDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub '${LogBucket}/ecs'
+          - Path: !Sub '${LogBucket}/lambda'
+          - Path: !Sub '${LogBucket}/apigtw'
+          - Path: !Sub '${LogBucket}/ec2'
+
+  KinesisFirehoseECS:
+    Condition: HasECS
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: !Sub 'kinesis-ecs-${AWS::AccountId}'
+      DeliveryStreamType: DirectPut
+      S3DestinationConfiguration:
+        BucketARN: !GetAtt LogBucket.Arn
+        Prefix: 'ecs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/'
+        ErrorOutputPrefix: 'ecs-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/'
+        RoleARN: !GetAtt KinesisRole.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 5
+
+  KinesisFirehoseLambda:
+    Condition: HasLambda
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: !Sub 'kinesis-lambda-${AWS::AccountId}'
+      DeliveryStreamType: DirectPut
+      S3DestinationConfiguration:
+        BucketARN: !GetAtt LogBucket.Arn
+        Prefix: 'lambda/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/'
+        ErrorOutputPrefix: 'lambda-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/'
+        RoleARN: !GetAtt KinesisRole.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 5
+
+  KinesisFirehoseApiGtw:
+    Condition: HasApiGtw
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: !Sub 'kinesis-apigtw-${AWS::AccountId}'
+      DeliveryStreamType: DirectPut
+      S3DestinationConfiguration:
+        BucketARN: !GetAtt LogBucket.Arn
+        Prefix: 'apigtw/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/'
+        ErrorOutputPrefix: 'apigtw-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/'
+        RoleARN: !GetAtt KinesisRole.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 5
+
+  KinesisFirehoseEC2:
+    Condition: HasEC2
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: !Sub 'kinesis-ec2-${AWS::AccountId}'
+      DeliveryStreamType: DirectPut
+      S3DestinationConfiguration:
+        BucketARN: !GetAtt LogBucket.Arn
+        Prefix: 'ec2/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/'
+        ErrorOutputPrefix: 'ec2-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/'
+        RoleARN: !GetAtt KinesisRole.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 5
+    
+Outputs:
+  BucketName:
+    Value: !Ref LogBucket
+  KinesisFirehoseECSName:
+    Condition: HasECS
+    Value: !Ref KinesisFirehoseECS
+  KinesisFirehoseECSArn:
+    Condition: HasECS
+    Value: !GetAtt KinesisFirehoseECS.Arn
+  KinesisFirehoseLambdaName:
+    Condition: HasLambda
+    Value: !Ref KinesisFirehoseLambda
+  KinesisFirehoseLambdaArn:
+    Condition: HasLambda
+    Value: !GetAtt KinesisFirehoseLambda.Arn
+  KinesisFirehoseApiGtwName:
+    Condition: HasApiGtw
+    Value: !Ref KinesisFirehoseApiGtw
+  KinesisFirehoseApiGtwArn:
+    Condition: HasApiGtw
+    Value: !GetAtt KinesisFirehoseApiGtw.Arn
+  KinesisFirehoseEC2Name:
+    Condition: HasEC2
+    Value: !Ref KinesisFirehoseApiGtw
+  KinesisFirehoseEC2Arn:
+    Condition: HasEC2
+    Value: !GetAtt KinesisFirehoseEC2.Arn
