@@ -96,7 +96,7 @@ class LogsAPIHTTPExtension():
                         self.firehose.put_record(
                             DeliveryStreamName=self.firehose_stream_name,
                             Record={
-                                'Data': json.dumps(log_data)
+                                'Data': json.dumps(log_data)+"\n"
                             }
                         )
                 except Exception as e:
