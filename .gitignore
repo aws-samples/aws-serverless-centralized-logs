@@ -1,5 +1,8 @@
 # PYTHON
 venv
+samples/lambda/extensions/lib/*
+!samples/lambda/extensions/lib/requirements.txt
+*.zip
 
 # OSX
 .DS_Store

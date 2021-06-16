@@ -77,6 +77,7 @@ This library is licensed under the MIT-0 License. See the LICENSE file.
 - Lambda:
   - https://aws.amazon.com/blogs/compute/using-aws-lambda-extensions-to-send-logs-to-custom-destinations/
   - https://boto3.amazonaws.com/v1/documentation/api/1.9.42/reference/services/firehose.html#Firehose.Client.put_record
+  - https://github.com/aws-samples/aws-lambda-extensions
 - API Gateway:
   - https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-logging-to-kinesis.html
 - EC2:
