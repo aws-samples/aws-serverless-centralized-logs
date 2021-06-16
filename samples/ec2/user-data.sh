@@ -1,7 +1,10 @@
 #!/bin/bash
 
-yum update
-yum install nginx
+sudo yum update -y
+sudo amazon-linux-extras install nginx1 -y
+sudo yum install aws-kinesis-agent -y
 
-service nginx start
-chkconfig nginx on
+sudo service nginx start
+sudo chkconfig nginx on
+sudo service aws-kinesis-agent start
+sudo chkconfig aws-kinesis-agent on

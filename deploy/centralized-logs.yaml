@@ -11,7 +11,7 @@ Conditions:
   HasECS: !Equals [true, true]
   HasLambda: !Equals [true, true]
   HasApiGtw: !Equals [true, true]
-  HasEC2: !Equals [true, true]
+  HasEC2: !Equals [true, false]
 
 Resources:
   LogBucket:
@@ -118,7 +118,7 @@ Resources:
           - Path: !Sub '${LogBucket}/ecs'
           - Path: !Sub '${LogBucket}/lambda'
           - Path: !Sub '${LogBucket}/apigtw'
-          - Path: !Sub '${LogBucket}/ec2'
+#          - Path: !Sub '${LogBucket}/ec2'
 
   KinesisFirehoseECS:
     Condition: HasECS

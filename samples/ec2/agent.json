@@ -1,0 +1,16 @@
+{
+  "cloudwatch.emitMetrics": false,
+  "kinesis.endpoint": "",
+  "firehose.endpoint": "",
+
+  "flows": [
+    {
+      "filePattern": "/var/log/nginx/access.log*",
+      "deliveryStream": "kinesis-ec2-accountid"
+    },
+    {
+      "filePattern": "/var/log/nginx/error.log*",
+      "deliveryStream": "kinesis-ec2-accountid"
+    }
+  ]
+}
