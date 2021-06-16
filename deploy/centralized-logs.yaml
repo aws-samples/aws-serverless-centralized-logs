@@ -154,7 +154,7 @@ Resources:
     Condition: HasApiGtw
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
-      DeliveryStreamName: !Sub 'kinesis-apigtw-${AWS::AccountId}'
+      DeliveryStreamName: !Sub 'amazon-apigateway-${AWS::AccountId}'
       DeliveryStreamType: DirectPut
       S3DestinationConfiguration:
         BucketARN: !GetAtt LogBucket.Arn

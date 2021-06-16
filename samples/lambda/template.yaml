@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: sample-lambda
+
+Globals:
+  Function:
+    Timeout: 3
+
+Resources:
+  APIGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      AccessLogSetting:
+        DestinationArn: "arn:example"
+        Format: '{"requestId":"$context.requestId", "ip": "$context.identity.sourceIp", "requestTime":"$context.requestTime", "responseLength":"$context.responseLength"}\n'
+      StageName: Dev
+
+  HelloWorldFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Description: String
+      ManagedPolicyArns:
+        ["arn:aws:iam::aws:policy/AmazonKinesisFirehoseFullAccess"]
+      RoleName: !Sub "LambdaLogRole-${AWS::AccountId}"
+
+  HelloWorldFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /
+            Method: get
+            RestApiId: !Ref APIGateway
+      Role: !GetAtt HelloWorldFunctionRole.Arn
+      Environment:
+        Variables:
+          FIREHOSE_STREAM_NAME: "kinesis-lambda-accountid"
+      Layers:
+        - !Ref LoggingLayers
+
+  LoggingLayers:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: serverless-logging-layer
+      Description: Serverless Central Logging Solution Extension
+      ContentUri: extensionsrc/
+      CompatibleRuntimes:
+        - python3.8
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: makefile
+
+Outputs:
+  HelloWorldApi:
+    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
+    Value: !Sub "https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/Dev/"
+  HelloWorldFunction:
+    Description: "Hello World Lambda Function ARN"
+    Value: !GetAtt HelloWorldFunction.Arn
+  HelloWorldFunctionIamRole:
+    Description: "Implicit IAM Role created for Hello World function"
+    Value: !GetAtt HelloWorldFunctionRole.Arn

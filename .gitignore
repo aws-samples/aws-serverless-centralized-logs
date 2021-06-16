@@ -6,3 +6,7 @@ samples/lambda/extensions/lib/*
 
 # OSX
 .DS_Store
+
+# SAM
+.aws-sam
+samconfig.toml
