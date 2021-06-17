@@ -11,14 +11,23 @@ Conditions:
   HasECS: !Equals [true, true]
   HasLambda: !Equals [true, true]
   HasApiGtw: !Equals [true, true]
-  HasEC2: !Equals [true, false]
+  HasEC2: !Equals [true, false] # change to true, true to enable
 
 Resources:
   LogBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'logs-${AWS::AccountId}'
+      BucketName: !Sub "logs-${AWS::AccountId}"
       AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
       LifecycleConfiguration:
         Rules:
           - Status: Enabled
@@ -27,7 +36,7 @@ Resources:
   GlueRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'GlueCrawler-to-S3-${AWS::AccountId}'
+      RoleName: !Sub "GlueCrawler-to-S3-${AWS::AccountId}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -36,7 +45,7 @@ Resources:
               Service:
                 - glue.amazonaws.com
             Action:
-              - 'sts:AssumeRole'
+              - "sts:AssumeRole"
       Policies:
         - PolicyName: gluecrawler-s3-policy
           PolicyDocument:
@@ -47,7 +56,7 @@ Resources:
                   - s3:*
                 Resource:
                   - !GetAtt LogBucket.Arn
-                  - !Sub '${LogBucket.Arn}/*'
+                  - !Sub "${LogBucket.Arn}/*"
               - Effect: Allow
                 Action:
                   - glue:*
@@ -58,7 +67,7 @@ Resources:
   KinesisRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'KinesisFirehose-to-S3-${AWS::AccountId}'
+      RoleName: !Sub "KinesisFirehose-to-S3-${AWS::AccountId}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -67,7 +76,7 @@ Resources:
               Service:
                 - firehose.amazonaws.com
             Action:
-              - 'sts:AssumeRole'
+              - "sts:AssumeRole"
       Policies:
         - PolicyName: kinesisfirehose-s3-policy
           PolicyDocument:
@@ -83,7 +92,7 @@ Resources:
                   - s3:PutObject
                 Resource:
                   - !GetAtt LogBucket.Arn
-                  - !Sub '${LogBucket.Arn}/*'
+                  - !Sub "${LogBucket.Arn}/*"
               - Effect: Allow
                 Action:
                   - kinesis:DescribeStream
@@ -103,33 +112,33 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: !Sub 'logdb-${AWS::AccountId}'
+        Name: !Sub "logdb-${AWS::AccountId}"
 
   GlueCrawler:
     Type: AWS::Glue::Crawler
     Properties:
-      Name: !Sub 'crawler-${AWS::AccountId}'
+      Name: !Sub "crawler-${AWS::AccountId}"
       Role: !GetAtt GlueRole.Arn
       Schedule:
         ScheduleExpression: cron(0 12 * * ? *)
       DatabaseName: !Ref GlueDatabase
       Targets:
         S3Targets:
-          - Path: !Sub '${LogBucket}/ecs'
-          - Path: !Sub '${LogBucket}/lambda'
-          - Path: !Sub '${LogBucket}/apigtw'
-#          - Path: !Sub '${LogBucket}/ec2'
+          - Path: !Sub "${LogBucket}/ecs"
+          - Path: !Sub "${LogBucket}/lambda"
+          - Path: !Sub "${LogBucket}/apigtw"
+  #          - Path: !Sub '${LogBucket}/ec2'
 
   KinesisFirehoseECS:
     Condition: HasECS
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
-      DeliveryStreamName: !Sub 'kinesis-ecs-${AWS::AccountId}'
+      DeliveryStreamName: !Sub "kinesis-ecs-${AWS::AccountId}"
       DeliveryStreamType: DirectPut
       S3DestinationConfiguration:
         BucketARN: !GetAtt LogBucket.Arn
-        Prefix: 'ecs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/'
-        ErrorOutputPrefix: 'ecs-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/'
+        Prefix: "ecs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
+        ErrorOutputPrefix: "ecs-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/"
         RoleARN: !GetAtt KinesisRole.Arn
         BufferingHints:
           IntervalInSeconds: 60
@@ -139,12 +148,12 @@ Resources:
     Condition: HasLambda
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
-      DeliveryStreamName: !Sub 'kinesis-lambda-${AWS::AccountId}'
+      DeliveryStreamName: !Sub "kinesis-lambda-${AWS::AccountId}"
       DeliveryStreamType: DirectPut
       S3DestinationConfiguration:
         BucketARN: !GetAtt LogBucket.Arn
-        Prefix: 'lambda/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/'
-        ErrorOutputPrefix: 'lambda-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/'
+        Prefix: "lambda/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
+        ErrorOutputPrefix: "lambda-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/"
         RoleARN: !GetAtt KinesisRole.Arn
         BufferingHints:
           IntervalInSeconds: 60
@@ -154,12 +163,12 @@ Resources:
     Condition: HasApiGtw
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
-      DeliveryStreamName: !Sub 'amazon-apigateway-${AWS::AccountId}'
+      DeliveryStreamName: !Sub "amazon-apigateway-${AWS::AccountId}"
       DeliveryStreamType: DirectPut
       S3DestinationConfiguration:
         BucketARN: !GetAtt LogBucket.Arn
-        Prefix: 'apigtw/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/'
-        ErrorOutputPrefix: 'apigtw-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/'
+        Prefix: "apigtw/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
+        ErrorOutputPrefix: "apigtw-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/"
         RoleARN: !GetAtt KinesisRole.Arn
         BufferingHints:
           IntervalInSeconds: 60
@@ -169,17 +178,17 @@ Resources:
     Condition: HasEC2
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
-      DeliveryStreamName: !Sub 'kinesis-ec2-${AWS::AccountId}'
+      DeliveryStreamName: !Sub "kinesis-ec2-${AWS::AccountId}"
       DeliveryStreamType: DirectPut
       S3DestinationConfiguration:
         BucketARN: !GetAtt LogBucket.Arn
-        Prefix: 'ec2/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/'
-        ErrorOutputPrefix: 'ec2-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/'
+        Prefix: "ec2/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
+        ErrorOutputPrefix: "ec2-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/"
         RoleARN: !GetAtt KinesisRole.Arn
         BufferingHints:
           IntervalInSeconds: 60
           SizeInMBs: 5
-    
+
 Outputs:
   BucketName:
     Value: !Ref LogBucket
