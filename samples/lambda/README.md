@@ -12,7 +12,7 @@ _Pre-reqs:_
 1. Build dependencies
 
 ```
-sam builld
+sam build
 ```
 
 2. Change DestinationArn and FIREHOSE_STREAM_NAME variable on [template file](template.yaml) with the output from solution CloudFormation
