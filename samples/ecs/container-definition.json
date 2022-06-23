@@ -13,6 +13,7 @@
         "options": {
           "delivery_stream": "",
           "region": "",
+          "role_arn": "",
           "Name": "firehose"
         }
       },

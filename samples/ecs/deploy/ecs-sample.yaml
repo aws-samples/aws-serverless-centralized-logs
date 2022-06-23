@@ -1,5 +1,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
+Parameters:
+  ApplicationAccountRoleArn:
+    Type: String
+    Description: Application account role Arn in logging account
+    Default: ""
+
+Conditions:
+  HasLoggingAccount: !Not [!Equals [!Ref "ApplicationAccountRoleArn", ""]]
+
 Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
@@ -34,6 +43,20 @@ Resources:
           "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
           "arn:aws:iam::aws:policy/AmazonKinesisFirehoseFullAccess",
         ]
+
+  AssumeLoggingPolicy:
+    Condition: HasLoggingAccount
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: assume-logging-policy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: "sts:AssumeRole"
+            Resource: !Ref ApplicationAccountRoleArn
+      Roles:
+        - !Ref TaskExecutionRole
 
   VPC:
     Type: AWS::EC2::VPC

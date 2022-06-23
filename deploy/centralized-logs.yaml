@@ -6,12 +6,13 @@ Parameters:
     Description: Number in days to retain logs
     Default: 30
 
-# change to [true, false] to disable the kinesis creation for the resource
+  ApplicationAccount:
+    Type: String
+    Description: Application account id
+    Default: ""
+
 Conditions:
-  HasECS: !Equals [true, true]
-  HasLambda: !Equals [true, true]
-  HasApiGtw: !Equals [true, true]
-  HasEC2: !Equals [true, false] # change to true, true to enable
+  HasApplicationAccount: !Not [!Equals [!Ref "ApplicationAccount", ""]]
 
 Resources:
   LogBucket:
@@ -124,95 +125,55 @@ Resources:
       DatabaseName: !Ref GlueDatabase
       Targets:
         S3Targets:
-          - Path: !Sub "${LogBucket}/ecs"
-          - Path: !Sub "${LogBucket}/lambda"
-          - Path: !Sub "${LogBucket}/apigtw"
-  #          - Path: !Sub '${LogBucket}/ec2'
+          - Path: !Sub "${LogBucket}"
 
-  KinesisFirehoseECS:
-    Condition: HasECS
+  KinesisFirehose:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
-      DeliveryStreamName: !Sub "kinesis-ecs-${AWS::AccountId}"
+      DeliveryStreamName: !Sub "kinesis-firehose-${AWS::AccountId}"
       DeliveryStreamType: DirectPut
       S3DestinationConfiguration:
         BucketARN: !GetAtt LogBucket.Arn
-        Prefix: "ecs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
+        Prefix: "logging/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
         ErrorOutputPrefix: "ecs-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/"
         RoleARN: !GetAtt KinesisRole.Arn
         BufferingHints:
           IntervalInSeconds: 60
           SizeInMBs: 5
 
-  KinesisFirehoseLambda:
-    Condition: HasLambda
-    Type: AWS::KinesisFirehose::DeliveryStream
+  ApplicationAccountRole:
+    Condition: HasApplicationAccount
+    Type: AWS::IAM::Role
     Properties:
-      DeliveryStreamName: !Sub "kinesis-lambda-${AWS::AccountId}"
-      DeliveryStreamType: DirectPut
-      S3DestinationConfiguration:
-        BucketARN: !GetAtt LogBucket.Arn
-        Prefix: "lambda/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
-        ErrorOutputPrefix: "lambda-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/"
-        RoleARN: !GetAtt KinesisRole.Arn
-        BufferingHints:
-          IntervalInSeconds: 60
-          SizeInMBs: 5
-
-  KinesisFirehoseApiGtw:
-    Condition: HasApiGtw
-    Type: AWS::KinesisFirehose::DeliveryStream
-    Properties:
-      DeliveryStreamName: !Sub "amazon-apigateway-${AWS::AccountId}"
-      DeliveryStreamType: DirectPut
-      S3DestinationConfiguration:
-        BucketARN: !GetAtt LogBucket.Arn
-        Prefix: "apigtw/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
-        ErrorOutputPrefix: "apigtw-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/"
-        RoleARN: !GetAtt KinesisRole.Arn
-        BufferingHints:
-          IntervalInSeconds: 60
-          SizeInMBs: 5
-
-  KinesisFirehoseEC2:
-    Condition: HasEC2
-    Type: AWS::KinesisFirehose::DeliveryStream
-    Properties:
-      DeliveryStreamName: !Sub "kinesis-ec2-${AWS::AccountId}"
-      DeliveryStreamType: DirectPut
-      S3DestinationConfiguration:
-        BucketARN: !GetAtt LogBucket.Arn
-        Prefix: "ec2/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/"
-        ErrorOutputPrefix: "ec2-error/!{firehose:random-string}/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd}/"
-        RoleARN: !GetAtt KinesisRole.Arn
-        BufferingHints:
-          IntervalInSeconds: 60
-          SizeInMBs: 5
+      RoleName: !Sub "Application-Assume-${AWS::AccountId}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Ref ApplicationAccount
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: firehose-put-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "firehose:PutRecord"
+                  - "firehose:PutRecordBatch"
+                Resource:
+                  - !GetAtt KinesisFirehose.Arn
 
 Outputs:
   BucketName:
     Value: !Ref LogBucket
   KinesisFirehoseECSName:
-    Condition: HasECS
-    Value: !Ref KinesisFirehoseECS
+    Value: !Ref KinesisFirehose
   KinesisFirehoseECSArn:
-    Condition: HasECS
-    Value: !GetAtt KinesisFirehoseECS.Arn
-  KinesisFirehoseLambdaName:
-    Condition: HasLambda
-    Value: !Ref KinesisFirehoseLambda
-  KinesisFirehoseLambdaArn:
-    Condition: HasLambda
-    Value: !GetAtt KinesisFirehoseLambda.Arn
-  KinesisFirehoseApiGtwName:
-    Condition: HasApiGtw
-    Value: !Ref KinesisFirehoseApiGtw
-  KinesisFirehoseApiGtwArn:
-    Condition: HasApiGtw
-    Value: !GetAtt KinesisFirehoseApiGtw.Arn
-  KinesisFirehoseEC2Name:
-    Condition: HasEC2
-    Value: !Ref KinesisFirehoseApiGtw
-  KinesisFirehoseEC2Arn:
-    Condition: HasEC2
-    Value: !GetAtt KinesisFirehoseEC2.Arn
+    Value: !GetAtt KinesisFirehose.Arn
+  ApplicationAccountRoleArn:
+    Condition: HasApplicationAccount
+    Value: !GetAtt ApplicationAccountRole.Arn
